@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NYC Free Parking Map MVP</title>
+  
+  <!-- Leaflet CSS for basic map styling -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { width: 100%; height: 100vh; }
+  </style>
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JavaScript library -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // 1. Initialize map centered on Midtown Manhattan
+    const map = L.map('map').setView([40.7549, -73.9840], 15);
+
+    // 2. Load free tile layer from OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 3. Fetch parking sign data via NYC Open Data API (SODA)
+    // Dataset: "Parking Regulation Locations and Signs" (ID: nfid-uabd)
+    async function fetchParkingSigns() {
+      const endpoint = "https://data.cityofnewyork.us/resource/nfid-uabd.json?$limit=100";
+
+      try {
+        const response = await fetch(endpoint);
+        const signs = await response.json();
+
+        signs.forEach(sign => {
+          // Verify coordinates exist
+          if (sign.latitude && sign.longitude) {
+            const lat = parseFloat(sign.latitude);
+            const lng = parseFloat(sign.longitude);
+            const description = sign.sign_description || "No description available";
+
+            // Simple check if sign text indicates free vs restricted/metered
+            const isRestricted = description.includes("NO PARKING") || description.includes("METER");
+            const color = isRestricted ? 'red' : 'green';
+
+            // Place a marker/circle on the map for each sign
+            L.circleMarker([lat, lng], {
+              radius: 6,
+              color: color,
+              fillColor: color,
+              fillOpacity: 0.8
+            })
+            .bindPopup(`<b>Sign Info:</b><br>${description}`)
+            .addTo(map);
+          }
+        });
+      } catch (error) {
+        console.error("Error fetching NYC sign data:", error);
+      }
+    }
+
+    fetchParkingSigns();
+  </script>
+</body>
+</html>
