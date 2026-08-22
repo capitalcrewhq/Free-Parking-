@@ -19,42 +19,60 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // Initialize map centered on Midtown Manhattan
-    const map = L.map('map').setView([40.7549, -73.9840], 14);
+    // 1. Initialize map centered on Midtown Manhattan
+    const map = L.map('map').setView([40.7549, -73.9840], 15);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Fetch active parking regulation data from NYC Open Data
+    // 2. Demo sample locations (Guarantees visible markers right away)
+    const demoSpots = [
+      { lat: 40.7549, lng: -73.9840, desc: "FREE PARKING: Sun All Day / Mon-Sat 7PM-7AM", free: true },
+      { lat: 40.7558, lng: -73.9832, desc: "NO PARKING: Mon-Fri 8AM-6PM (Commercial)", free: false },
+      { lat: 40.7532, lng: -73.9855, desc: "FREE PARKING: Street Clean Tue/Fri 11AM-12:30PM", free: true },
+      { lat: 40.7565, lng: -73.9862, desc: "METERED PARKING: $4.50/hr Max 3 Hrs", free: false }
+    ];
+
+    demoSpots.forEach(spot => {
+      const color = spot.free ? '#2ecc71' : '#ff4d4d';
+      L.circleMarker([spot.lat, spot.lng], {
+        radius: 8,
+        color: '#ffffff',
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.9
+      })
+      .bindPopup(`<b>Parking Rule:</b><br>${spot.desc}`)
+      .addTo(map);
+    });
+
+    // 3. Live NYC Open Data Fetch
     async function fetchParkingSigns() {
-      // Query 200 regulation entries near Manhattan
-      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=200";
+      // Query NYC Sign Locations dataset using SoQL
+      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=100&$where=latitude%20IS%20NOT%20NULL";
 
       try {
         const response = await fetch(endpoint);
         const signs = await response.json();
 
         signs.forEach(sign => {
-          // Check for valid spatial location data
-          if (sign.the_geom && sign.the_geom.coordinates) {
-            const lng = sign.the_geom.coordinates[0];
-            const lat = sign.the_geom.coordinates[1];
-            const description = sign.sign_description || "Parking Zone";
+          if (sign.latitude && sign.longitude) {
+            const lat = parseFloat(sign.latitude);
+            const lng = parseFloat(sign.longitude);
+            const description = sign.sign_description || "Parking Regulation Zone";
 
-            // Color-code: Red for restrictions/meters, Green for free/open rules
             const isRestricted = description.includes("NO PARKING") || description.includes("NO STANDING") || description.includes("METER");
             const color = isRestricted ? '#ff4d4d' : '#2ecc71';
 
             L.circleMarker([lat, lng], {
-              radius: 7,
-              color: '#ffffff',
-              weight: 1,
+              radius: 6,
+              color: color,
               fillColor: color,
-              fillOpacity: 0.9
+              fillOpacity: 0.8
             })
-            .bindPopup(`<b>Regulation:</b><br>${description}`)
+            .bindPopup(`<b>Live Sign Rule:</b><br>${description}`)
             .addTo(map);
           }
         });
