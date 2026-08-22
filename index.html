@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NYC Free Parking Map MVP</title>
   
-  <!-- Leaflet CSS for basic map styling -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
@@ -17,47 +16,45 @@
 
   <div id="map"></div>
 
-  <!-- Leaflet JavaScript library -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // 1. Initialize map centered on Midtown Manhattan
-    const map = L.map('map').setView([40.7549, -73.9840], 15);
+    // Initialize map centered on Midtown Manhattan
+    const map = L.map('map').setView([40.7549, -73.9840], 14);
 
-    // 2. Load free tile layer from OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // 3. Fetch parking sign data via NYC Open Data API (SODA)
-    // Dataset: "Parking Regulation Locations and Signs" (ID: nfid-uabd)
+    // Fetch active parking regulation data from NYC Open Data
     async function fetchParkingSigns() {
-      const endpoint = "https://data.cityofnewyork.us/resource/nfid-uabd.json?$limit=100";
+      // Query 200 regulation entries near Manhattan
+      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=200";
 
       try {
         const response = await fetch(endpoint);
         const signs = await response.json();
 
         signs.forEach(sign => {
-          // Verify coordinates exist
-          if (sign.latitude && sign.longitude) {
-            const lat = parseFloat(sign.latitude);
-            const lng = parseFloat(sign.longitude);
-            const description = sign.sign_description || "No description available";
+          // Check for valid spatial location data
+          if (sign.the_geom && sign.the_geom.coordinates) {
+            const lng = sign.the_geom.coordinates[0];
+            const lat = sign.the_geom.coordinates[1];
+            const description = sign.sign_description || "Parking Zone";
 
-            // Simple check if sign text indicates free vs restricted/metered
-            const isRestricted = description.includes("NO PARKING") || description.includes("METER");
-            const color = isRestricted ? 'red' : 'green';
+            // Color-code: Red for restrictions/meters, Green for free/open rules
+            const isRestricted = description.includes("NO PARKING") || description.includes("NO STANDING") || description.includes("METER");
+            const color = isRestricted ? '#ff4d4d' : '#2ecc71';
 
-            // Place a marker/circle on the map for each sign
             L.circleMarker([lat, lng], {
-              radius: 6,
-              color: color,
+              radius: 7,
+              color: '#ffffff',
+              weight: 1,
               fillColor: color,
-              fillOpacity: 0.8
+              fillOpacity: 0.9
             })
-            .bindPopup(`<b>Sign Info:</b><br>${description}`)
+            .bindPopup(`<b>Regulation:</b><br>${description}`)
             .addTo(map);
           }
         });
