@@ -54,11 +54,12 @@
       bottom: 20px;
       left: 10px;
       z-index: 1000;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.85);
       color: white;
-      padding: 6px 12px;
+      padding: 6px 14px;
       border-radius: 20px;
       font-size: 12px;
+      font-weight: 500;
     }
   </style>
 </head>
@@ -70,14 +71,14 @@
     <button class="locate-btn" onclick="locateUser()">📍 Locate Me</button>
   </div>
 
-  <div id="status">Loading NYC Parking Data...</div>
+  <div id="status">Loading signs for current view...</div>
 
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    const map = L.map('map').setView([40.7549, -73.9840], 15);
+    const map = L.map('map').setView([40.7549, -73.9840], 16);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -93,7 +94,7 @@
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
-          map.setView([lat, lng], 16);
+          map.setView([lat, lng], 17);
 
           if (userMarker) map.removeLayer(userMarker);
 
@@ -123,12 +124,7 @@
           const lat = parseFloat(data[0].lat);
           const lon = parseFloat(data[0].lon);
 
-          map.setView([lat, lon], 16);
-
-          L.popup()
-            .setLatLng([lat, lon])
-            .setContent(`<b>Location:</b><br>${data[0].display_name}`)
-            .openOn(map);
+          map.setView([lat, lon], 17);
         } else {
           alert("NYC Location not found.");
         }
@@ -141,10 +137,20 @@
       if (e.key === 'Enter') searchAddress();
     });
 
-    async function fetchParkingSigns() {
+    async function fetchParkingSignsInView() {
       const statusEl = document.getElementById('status');
-      // Fetch signs using proper SoQL GeoJSON filter
-      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=1000&$where=the_geom%20IS%20NOT%20NULL";
+      statusEl.style.display = 'block';
+      statusEl.innerText = "Fetching signs in view...";
+
+      const bounds = map.getBounds();
+      const south = bounds.getSouth();
+      const north = bounds.getNorth();
+      const west = bounds.getWest();
+      const east = bounds.getEast();
+
+      // Query SoQL within exact bounding box coordinates
+      const whereClause = `within_box(the_geom, ${north}, ${west}, ${south}, ${east})`;
+      const endpoint = `https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=2000&$where=${encodeURIComponent(whereClause)}`;
 
       try {
         const response = await fetch(endpoint);
@@ -154,7 +160,6 @@
         let loadedCount = 0;
 
         signs.forEach(sign => {
-          // Extract coordinates from nested GeoJSON geometry [longitude, latitude]
           if (sign.the_geom && sign.the_geom.coordinates) {
             const lng = sign.the_geom.coordinates[0];
             const lat = sign.the_geom.coordinates[1];
@@ -164,10 +169,10 @@
             const color = isRestricted ? '#ff4d4d' : '#2ecc71';
 
             L.circleMarker([lat, lng], {
-              radius: 6,
+              radius: 7,
               color: color,
               fillColor: color,
-              fillOpacity: 0.8
+              fillOpacity: 0.85
             })
             .bindPopup(`<b>Live Sign Rule:</b><br>${description}`)
             .addTo(signMarkersLayer);
@@ -176,16 +181,17 @@
           }
         });
 
-        statusEl.innerText = `Loaded ${loadedCount} signs!`;
-        setTimeout(() => statusEl.style.display = 'none', 3000);
+        statusEl.innerText = `Displaying ${loadedCount} signs in this view`;
 
       } catch (error) {
         console.error("Error fetching NYC sign data:", error);
-        statusEl.innerText = "Error loading signs. Check console.";
+        statusEl.innerText = "API Rate limit or connection error.";
       }
     }
 
-    fetchParkingSigns();
+    // Trigger fetch on initial load and whenever user pans or zooms the map
+    map.on('moveend', fetchParkingSignsInView);
+    fetchParkingSignsInView();
   </script>
 </body>
 </html>
