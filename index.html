@@ -51,7 +51,7 @@
     // 3. Live NYC Open Data Fetch
     async function fetchParkingSigns() {
       // Query NYC Sign Locations dataset using SoQL
-      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=100&$where=latitude%20IS%20NOT%20NULL";
+      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=5000&$where=latitude%20IS%20NOT%20NULL";
 
       try {
         const response = await fetch(endpoint);
