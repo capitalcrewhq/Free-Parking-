@@ -5,14 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NYC Free Parking Map MVP</title>
   
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
     body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     #map { width: 100%; height: 100vh; }
 
-    /* Control Panel Box */
     .controls {
       position: absolute;
       top: 15px;
@@ -32,7 +30,7 @@
       border: 1px solid #ccc;
       border-radius: 6px;
       outline: none;
-      width: 200px;
+      width: 220px;
       font-size: 14px;
     }
 
@@ -47,34 +45,24 @@
       font-size: 14px;
     }
 
-    .controls button:hover {
-      background-color: #0056b3;
-    }
-
-    .controls button.locate-btn {
-      background-color: #34c759;
-    }
-
-    .controls button.locate-btn:hover {
-      background-color: #248a3d;
-    }
+    .controls button:hover { background-color: #0056b3; }
+    .controls button.locate-btn { background-color: #34c759; }
+    .controls button.locate-btn:hover { background-color: #248a3d; }
   </style>
 </head>
 <body>
 
   <div class="controls">
-    <input type="text" id="addressInput" placeholder="Search NYC address..." />
+    <input type="text" id="addressInput" placeholder="e.g. Times Square, W 42nd St..." />
     <button onclick="searchAddress()">Search</button>
     <button class="locate-btn" onclick="locateUser()">📍 Locate Me</button>
   </div>
 
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // 1. Initialize map centered on Midtown Manhattan
     const map = L.map('map').setView([40.7549, -73.9840], 15);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -83,15 +71,15 @@
     }).addTo(map);
 
     let userMarker;
+    let signMarkersLayer = L.layerGroup().addTo(map);
 
-    // 2. Locate Me Function
     function locateUser() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(position => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
-          map.setView([lat, lng], 17);
+          map.setView([lat, lng], 16);
 
           if (userMarker) map.removeLayer(userMarker);
 
@@ -107,12 +95,12 @@
       }
     }
 
-    // 3. Search Address Function
     async function searchAddress() {
       const query = document.getElementById('addressInput').value;
       if (!query) return;
 
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + " NYC")}`;
+      // Force search within NYC bounds
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ", New York City")}`;
 
       try {
         const response = await fetch(url);
@@ -122,34 +110,33 @@
           const lat = parseFloat(data[0].lat);
           const lon = parseFloat(data[0].lon);
 
-          map.setView([lat, lon], 17);
+          map.setView([lat, lon], 16);
 
           L.popup()
             .setLatLng([lat, lon])
-            .setContent(`<b>Search Result:</b><br>${data[0].display_name}`)
+            .setContent(`<b>Location:</b><br>${data[0].display_name}`)
             .openOn(map);
         } else {
-          alert("Location not found. Try adding street name or borough.");
+          alert("NYC Location not found. Try entering a street name or borough.");
         }
       } catch (err) {
         console.error("Search error:", err);
       }
     }
 
-    // Allow pressing "Enter" in search box
     document.getElementById('addressInput').addEventListener('keypress', function (e) {
-      if (e.key === 'Enter') {
-        searchAddress();
-      }
+      if (e.key === 'Enter') searchAddress();
     });
 
-    // 4. Live NYC Open Data Fetch (5000 records)
     async function fetchParkingSigns() {
-      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=5000&$where=latitude%20IS%20NOT%20NULL";
+      // Query signs with valid coordinates across Manhattan
+      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=3000&$where=latitude%20IS%20NOT%20NULL%20AND%20latitude%20%3E%2040.70%20AND%20latitude%20%3C%2040.85";
 
       try {
         const response = await fetch(endpoint);
         const signs = await response.json();
+
+        signMarkersLayer.clearLayers();
 
         signs.forEach(sign => {
           if (sign.latitude && sign.longitude) {
@@ -167,7 +154,7 @@
               fillOpacity: 0.8
             })
             .bindPopup(`<b>Live Sign Rule:</b><br>${description}`)
-            .addTo(map);
+            .addTo(signMarkersLayer);
           }
         });
       } catch (error) {
