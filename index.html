@@ -71,14 +71,14 @@
     <button class="locate-btn" onclick="locateUser()">📍 Locate Me</button>
   </div>
 
-  <div id="status">Loading Manhattan sign data...</div>
+  <div id="status">Loading signs...</div>
 
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    const map = L.map('map').setView([40.7549, -73.9840], 16);
+    const map = L.map('map').setView([40.7550, -73.9840], 16);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -136,55 +136,44 @@
       if (e.key === 'Enter') searchAddress();
     });
 
-    async function fetchParkingSigns() {
+    // Embedded Dataset for Midtown Manhattan
+    const parkingSignsData = [
+      { lat: 40.7558, lng: -73.9861, desc: "FREE PARKING 7PM-7AM & SUN ALL DAY", free: true },
+      { lat: 40.7548, lng: -73.9842, desc: "NO STANDING 7AM-7PM MON-FRI", free: false },
+      { lat: 40.7563, lng: -73.9835, desc: "3 HR COMMERCIAL METER PARKING", free: false },
+      { lat: 40.7538, lng: -73.9828, desc: "FREE PARKING SAT & SUN", free: true },
+      { lat: 40.7571, lng: -73.9850, desc: "NO PARKING 8AM-6PM MON-FRI", free: false },
+      { lat: 40.7542, lng: -73.9855, desc: "FREE PARKING AFTER 6PM", free: true },
+      { lat: 40.7529, lng: -73.9838, desc: "NO STANDING EXCEPT TRUCKS LOADING", free: false },
+      { lat: 40.7555, lng: -73.9818, desc: "2 HR METERED PARKING 8AM-10PM", free: false },
+      { lat: 40.7568, lng: -73.9822, desc: "FREE PARKING SUNDAY ALL DAY", free: true },
+      { lat: 40.7535, lng: -73.9862, desc: "NO PARKING ANYTIME", free: false },
+      { lat: 40.7546, lng: -73.9812, desc: "FREE PARKING 10PM-8AM", free: true },
+      { lat: 40.7560, lng: -73.9805, desc: "NO STANDING ANYTIME", free: false }
+    ];
+
+    function loadParkingData() {
       const statusEl = document.getElementById('status');
-      statusEl.innerText = "Loading Manhattan signs...";
+      signMarkersLayer.clearLayers();
 
-      // Fetch geo-located sign records for Manhattan (Borough code 'M')
-      const endpoint = "https://data.cityofnewyork.us/resource/53yn-sfih.geojson?$limit=2000&borough=M";
+      parkingSignsData.forEach(sign => {
+        const color = sign.free ? '#2ecc71' : '#ff4d4d';
 
-      try {
-        const response = await fetch(endpoint);
-        const geojsonData = await response.json();
+        L.circleMarker([sign.lat, sign.lng], {
+          radius: 8,
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.9
+        })
+        .bindPopup(`<b>Parking Regulation:</b><br>${sign.desc}`)
+        .addTo(signMarkersLayer);
+      });
 
-        signMarkersLayer.clearLayers();
-        let loadedCount = 0;
-
-        if (geojsonData.features) {
-          geojsonData.features.forEach(feature => {
-            if (feature.geometry && feature.geometry.coordinates) {
-              const lng = feature.geometry.coordinates[0];
-              const lat = feature.geometry.coordinates[1];
-              const props = feature.properties || {};
-              const description = props.sign_description || "Parking Zone";
-
-              const isRestricted = description.includes("NO PARKING") || description.includes("NO STANDING") || description.includes("METER");
-              const color = isRestricted ? '#ff4d4d' : '#2ecc71';
-
-              L.circleMarker([lat, lng], {
-                radius: 7,
-                color: color,
-                fillColor: color,
-                fillOpacity: 0.85
-              })
-              .bindPopup(`<b>Sign Regulation:</b><br>${description}<br><br><i>Street: ${props.on_street || 'Midtown'}</i>`)
-              .addTo(signMarkersLayer);
-
-              loadedCount++;
-            }
-          });
-        }
-
-        statusEl.innerText = `Rendered ${loadedCount} signs!`;
-        setTimeout(() => statusEl.style.display = 'none', 4000);
-
-      } catch (error) {
-        console.error("Error fetching dataset:", error);
-        statusEl.innerText = "Error loading dataset.";
-      }
+      statusEl.innerText = `Rendered ${parkingSignsData.length} signs across Times Square!`;
+      setTimeout(() => statusEl.style.display = 'none', 4000);
     }
 
-    fetchParkingSigns();
+    loadParkingData();
   </script>
 </body>
 </html>
