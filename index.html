@@ -71,7 +71,7 @@
     <button class="locate-btn" onclick="locateUser()">📍 Locate Me</button>
   </div>
 
-  <div id="status">Loading signs...</div>
+  <div id="status">Connecting to NYC Open Data...</div>
 
   <div id="map"></div>
 
@@ -87,7 +87,6 @@
 
     let userMarker;
     let signMarkersLayer = L.layerGroup().addTo(map);
-    let cachedSigns = [];
 
     function locateUser() {
       if (navigator.geolocation) {
@@ -137,61 +136,54 @@
       if (e.key === 'Enter') searchAddress();
     });
 
-    // Render signs that fall within current visible map boundaries
-    function renderVisibleSigns() {
-      if (!cachedSigns.length) return;
-
-      const bounds = map.getBounds();
-      signMarkersLayer.clearLayers();
-      let visibleCount = 0;
-
-      cachedSigns.forEach(sign => {
-        if (sign.the_geom && sign.the_geom.coordinates) {
-          const lng = sign.the_geom.coordinates[0];
-          const lat = sign.the_geom.coordinates[1];
-
-          if (bounds.contains([lat, lng])) {
-            const description = sign.sign_description || "Parking Zone";
-            const isRestricted = description.includes("NO PARKING") || description.includes("NO STANDING") || description.includes("METER");
-            const color = isRestricted ? '#ff4d4d' : '#2ecc71';
-
-            L.circleMarker([lat, lng], {
-              radius: 7,
-              color: color,
-              fillColor: color,
-              fillOpacity: 0.85
-            })
-            .bindPopup(`<b>Live Sign Rule:</b><br>${description}`)
-            .addTo(signMarkersLayer);
-
-            visibleCount++;
-          }
-        }
-      });
-
-      const statusEl = document.getElementById('status');
-      statusEl.innerText = `Displaying ${visibleCount} signs in this view`;
-    }
-
-    // Fetch batch data reliably without spatial query limits
     async function fetchParkingSigns() {
       const statusEl = document.getElementById('status');
-      statusEl.innerText = "Downloading NYC Parking Dataset...";
+      statusEl.innerText = "Loading NYC Signs...";
 
-      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=5000";
+      // Fetch 1000 GeoJSON features with cache-busting timestamp
+      const endpoint = `https://data.cityofnewyork.us/resource/pvqr-5b48.geojson?$limit=1000&cb=${Date.now()}`;
 
       try {
         const response = await fetch(endpoint);
-        cachedSigns = await response.json();
+        const geojsonData = await response.json();
 
-        renderVisibleSigns();
+        signMarkersLayer.clearLayers();
+        let loadedCount = 0;
+
+        if (geojsonData.features) {
+          geojsonData.features.forEach(feature => {
+            if (feature.geometry && feature.geometry.coordinates) {
+              const lng = feature.geometry.coordinates[0];
+              const lat = feature.geometry.coordinates[1];
+              const props = feature.properties || {};
+              const description = props.sign_description || "Parking Regulation Zone";
+
+              const isRestricted = description.includes("NO PARKING") || description.includes("NO STANDING") || description.includes("METER");
+              const color = isRestricted ? '#ff4d4d' : '#2ecc71';
+
+              L.circleMarker([lat, lng], {
+                radius: 7,
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.85
+              })
+              .bindPopup(`<b>Live Sign Rule:</b><br>${description}`)
+              .addTo(signMarkersLayer);
+
+              loadedCount++;
+            }
+          });
+        }
+
+        statusEl.innerText = `Rendered ${loadedCount} active signs!`;
+        setTimeout(() => statusEl.style.display = 'none', 4000);
+
       } catch (error) {
         console.error("Error fetching NYC sign data:", error);
-        statusEl.innerText = "Connection error loading dataset.";
+        statusEl.innerText = "Failed to load dataset.";
       }
     }
 
-    map.on('moveend', renderVisibleSigns);
     fetchParkingSigns();
   </script>
 </body>
