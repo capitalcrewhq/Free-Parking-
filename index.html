@@ -71,7 +71,7 @@
     <button class="locate-btn" onclick="locateUser()">📍 Locate Me</button>
   </div>
 
-  <div id="status">Loading signs for current view...</div>
+  <div id="status">Loading signs...</div>
 
   <div id="map"></div>
 
@@ -87,6 +87,7 @@
 
     let userMarker;
     let signMarkersLayer = L.layerGroup().addTo(map);
+    let cachedSigns = [];
 
     function locateUser() {
       if (navigator.geolocation) {
@@ -103,10 +104,10 @@
             .bindPopup("<b>You are here!</b>")
             .openPopup();
         }, () => {
-          alert("Could not access your location. Check browser permissions.");
+          alert("Could not access location. Check permissions.");
         });
       } else {
-        alert("Geolocation is not supported by your browser.");
+        alert("Geolocation not supported.");
       }
     }
 
@@ -123,7 +124,6 @@
         if (data.length > 0) {
           const lat = parseFloat(data[0].lat);
           const lon = parseFloat(data[0].lon);
-
           map.setView([lat, lon], 17);
         } else {
           alert("NYC Location not found.");
@@ -137,34 +137,21 @@
       if (e.key === 'Enter') searchAddress();
     });
 
-    async function fetchParkingSignsInView() {
-      const statusEl = document.getElementById('status');
-      statusEl.style.display = 'block';
-      statusEl.innerText = "Fetching signs in view...";
+    // Render signs that fall within current visible map boundaries
+    function renderVisibleSigns() {
+      if (!cachedSigns.length) return;
 
       const bounds = map.getBounds();
-      const south = bounds.getSouth();
-      const north = bounds.getNorth();
-      const west = bounds.getWest();
-      const east = bounds.getEast();
+      signMarkersLayer.clearLayers();
+      let visibleCount = 0;
 
-      // Query SoQL within exact bounding box coordinates
-      const whereClause = `within_box(the_geom, ${north}, ${west}, ${south}, ${east})`;
-      const endpoint = `https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=2000&$where=${encodeURIComponent(whereClause)}`;
+      cachedSigns.forEach(sign => {
+        if (sign.the_geom && sign.the_geom.coordinates) {
+          const lng = sign.the_geom.coordinates[0];
+          const lat = sign.the_geom.coordinates[1];
 
-      try {
-        const response = await fetch(endpoint);
-        const signs = await response.json();
-
-        signMarkersLayer.clearLayers();
-        let loadedCount = 0;
-
-        signs.forEach(sign => {
-          if (sign.the_geom && sign.the_geom.coordinates) {
-            const lng = sign.the_geom.coordinates[0];
-            const lat = sign.the_geom.coordinates[1];
-            const description = sign.sign_description || "Parking Regulation Zone";
-
+          if (bounds.contains([lat, lng])) {
+            const description = sign.sign_description || "Parking Zone";
             const isRestricted = description.includes("NO PARKING") || description.includes("NO STANDING") || description.includes("METER");
             const color = isRestricted ? '#ff4d4d' : '#2ecc71';
 
@@ -177,21 +164,35 @@
             .bindPopup(`<b>Live Sign Rule:</b><br>${description}`)
             .addTo(signMarkersLayer);
 
-            loadedCount++;
+            visibleCount++;
           }
-        });
+        }
+      });
 
-        statusEl.innerText = `Displaying ${loadedCount} signs in this view`;
+      const statusEl = document.getElementById('status');
+      statusEl.innerText = `Displaying ${visibleCount} signs in this view`;
+    }
 
+    // Fetch batch data reliably without spatial query limits
+    async function fetchParkingSigns() {
+      const statusEl = document.getElementById('status');
+      statusEl.innerText = "Downloading NYC Parking Dataset...";
+
+      const endpoint = "https://data.cityofnewyork.us/resource/pvqr-5b48.json?$limit=5000";
+
+      try {
+        const response = await fetch(endpoint);
+        cachedSigns = await response.json();
+
+        renderVisibleSigns();
       } catch (error) {
         console.error("Error fetching NYC sign data:", error);
-        statusEl.innerText = "API Rate limit or connection error.";
+        statusEl.innerText = "Connection error loading dataset.";
       }
     }
 
-    // Trigger fetch on initial load and whenever user pans or zooms the map
-    map.on('moveend', fetchParkingSignsInView);
-    fetchParkingSignsInView();
+    map.on('moveend', renderVisibleSigns);
+    fetchParkingSigns();
   </script>
 </body>
 </html>
